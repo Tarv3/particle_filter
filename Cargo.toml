@@ -1,0 +1,10 @@
+[package]
+name = "particle_filter"
+version = "0.1.0"
+authors = ["Joshua"]
+
+[dependencies]
+glium = "0.22.0"
+rand = "*"
+nalgebra-glm = "*"
+ordered-float = "1.0"
