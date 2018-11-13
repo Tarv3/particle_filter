@@ -3,7 +3,7 @@ use glium::backend::glutin::Display;
 use window::Window;
 use std::time::Instant;
 
-pub fn build_program(display: &Display) -> Program {
+pub fn build_particle_program(display: &Display) -> Program {
     let vertex = include_str!("shaders/vert.glsl");
     let fragment = include_str!("shaders/frag.glsl");
 
@@ -16,6 +16,24 @@ pub fn build_program(display: &Display) -> Program {
         transform_feedback_varyings: None,
         outputs_srgb: true,
         uses_point_size: true,
+    };
+
+    Program::new(display, input).unwrap()
+}
+
+pub fn build_point_program(display: &Display) -> Program {
+    let vertex = include_str!("shaders/vert_p.glsl");
+    let fragment = include_str!("shaders/frag_p.glsl");
+
+    let input = ProgramCreationInput::SourceCode {
+        vertex_shader: vertex,
+        tessellation_control_shader: None,
+        tessellation_evaluation_shader: None,
+        geometry_shader: None,
+        fragment_shader: fragment,
+        transform_feedback_varyings: None,
+        outputs_srgb: true,
+        uses_point_size: false,
     };
 
     Program::new(display, input).unwrap()

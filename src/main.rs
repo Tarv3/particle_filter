@@ -1,46 +1,77 @@
 #[macro_use]
 extern crate glium;
-extern crate rand;
+#[macro_use]
+extern crate structopt;
 extern crate nalgebra_glm as glm;
 extern crate ordered_float as of;
+extern crate rand;
+extern crate serde;
+extern crate statrs;
+#[macro_use]
+extern crate serde_derive;
+extern crate rayon;
+extern crate serde_json;
 
-mod window;
-mod support;
+mod filter;
+mod input;
 mod measurement;
 mod renderer;
-mod filter;
+mod state;
+mod support;
+mod tracker;
 mod util;
+mod window;
 
 use glium::Surface;
 
 fn main() {
     let mut events_loop = glium::glutin::EventsLoop::new();
-    let mut window = window::Window::from_builder(&events_loop, |win_builder, context_builder| {
-        (win_builder.with_title("Hello There"), context_builder.with_vsync(true))
+    let window = window::Window::from_builder(&events_loop, |win_builder, context_builder| {
+        (
+            win_builder.with_title("Hello There"),
+            context_builder.with_vsync(true),
+        )
     }).unwrap();
-
-    let program = support::build_program(&window.display);
-    let mut renderer = renderer::ParticleRenderer::with_capacity(&window.display, 1000);
-    let mut filter = filter::Filter::new_start_box(1000, -10.0..10.0, -10.0..10.0);
-
-    let animal_pos = glm::vec2(0.0, 0.0);
-    let mut drone_pos = glm::vec2(5.0, 1.0);
-    let stddev = 0.01;
-    let motion = glm::vec2(-1.0, 1.0);
+    let mut state = state::State::new(&window.display).expect("Failed to load state");
 
     let draw_parameters = glium::draw_parameters::DrawParameters {
-        point_size: Some(3.0),
-        .. Default::default()
+        point_size: Some(5.0),
+        blend: glium::Blend::alpha_blending(),
+        ..Default::default()
     };
 
-    support::run(&window, &mut events_loop, |display, target, _events, time| {
-        drone_pos += motion * time;
-        util::update_filter(&mut filter, drone_pos, animal_pos, stddev);
-        renderer.update_particles(&filter);
-        renderer.update_buffer(&window.display).unwrap();
+    let mut elapsed = 0.0;
+    let mut measurement_timer = 0.0;
+    support::run(
+        &window,
+        &mut events_loop,
+        |display, target, events, time| {
+            elapsed += time;
+            measurement_timer += time;
 
-        target.clear_color(0.0, 0.0, 0.0, 1.0);
-        renderer.render_to_surface(target, &program, &draw_parameters, [1.0, 0.0, 0.0, 1.0]);
+            for event in events {
+                if let Some(pos) = input::handle_mouse_move(event) {
+                    let dims = match display.gl_window().get_inner_size() {
+                        Some(dims) => dims,
+                        None => break,
+                    };
+                    let x = pos.x / dims.width as f32 * 2.0 - 1.0;
+                    let y = -pos.y / dims.height as f32 * 2.0 + 1.0;
+                    state.drone_pos = glm::vec2(x, y) * 10.0;
+                }
+            }
+            if measurement_timer >= 0.25 {
+                measurement_timer -= 0.25;
+                state.update(time);
+            }
 
-    });
+            state.update_renderer(display);
+            target.clear_color(0.0, 0.0, 0.0, 1.0);
+
+            state
+                .renderer
+                .render_to_surface(target, &draw_parameters)
+                .unwrap();
+        },
+    );
 }
